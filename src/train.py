@@ -107,7 +107,7 @@ def main(args: Namespace) -> None:
     logging.info("Evaluation started")
 
     val_output_dir = training_config.output_dir / "validation" / data_config.dataset
-    val_results = trainer.predict(test_dataset, metric_key_prefix="val")
+    val_results = trainer.predict(val_dataset, metric_key_prefix="val")
     logging.info(f"Validation results: {val_results.metrics}")
     save_evaluation_results(
         results=val_results,

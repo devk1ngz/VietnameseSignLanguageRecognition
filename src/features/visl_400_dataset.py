@@ -12,7 +12,7 @@ class VISL400Dataset(BaseDataset):
         subset: str,
     ) -> Tuple[DatasetDict, dict, dict]:
         data_dir = Path(data_dir)
-        cams = subset.split("_")[1:]
+        cams = subset.split("_")[1:] if subset is not None else ["1"]
         gloss2id_file = data_dir / "gloss.csv"
 
         data_dict = {}

@@ -4,6 +4,7 @@ evaluate
 simple-parsing
 torch
 torchvision
+pytorchvideo
 hf-transfer
 decord
 accelerate

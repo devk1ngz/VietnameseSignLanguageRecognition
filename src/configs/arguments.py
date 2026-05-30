@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any
 from dataclasses import dataclass, field
 from utils import MODELS, VIDEO_EXTENSIONS
 import argparse
@@ -89,11 +88,10 @@ class TransformConfig:
 
 @dataclass
 class DataConfig:
-    dataset: str = "vsl"
+    dataset: str = "visl_400"
     modality: str = "rgb"
     subset: str = None
     data_dir: str = "data/processed/vsl"
-    transform: Any = None
     fps: int = 30
     debug: bool = False
     transform: TransformConfig = TransformConfig()

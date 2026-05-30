@@ -109,7 +109,7 @@ class SPOTERForGraphClassification(PreTrainedModel):
             hidden_dim=self.config.hidden_dim,
         )
 
-        if Path(self.config.pretrained).exists():
+        if self.config.pretrained is not None and Path(self.config.pretrained).exists():
             state_dict = torch.load(self.config.pretrained)
             for key in list(state_dict.keys()):
                 if key.startswith("model."):

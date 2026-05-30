@@ -1,5 +1,5 @@
 data:
-  dataset: vsl_98
+  dataset: visl_98
   modality: pose
   # subset: cam_1
   data_dir: vsltranslation/vsl_98

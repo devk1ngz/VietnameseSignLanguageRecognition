@@ -1,5 +1,5 @@
 data:
-  dataset: vsl_400
+  dataset: visl_400
   modality: rgb
   subset: cam_1
   data_dir: data/processed/vsl_400
