@@ -1,0 +1,13 @@
+data:
+  dataset: vsl_98
+  modality: pose
+  # subset: cam_1
+  data_dir: vsltranslation/vsl_98
+  transform:
+    normalization: True
+  fps: 30
+  debug: False
+evaluation:
+  arch: spoter
+  pretrained: vsltranslation/test_spoter
+  eval_set: test

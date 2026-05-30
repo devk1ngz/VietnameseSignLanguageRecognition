@@ -1,0 +1,27 @@
+data:
+  dataset: vsl_400
+  modality: pose
+  subset: cam_1
+  data_dir: data/processed/vsl_400
+  transform:
+    augmentation: True
+    aug_prob: 0.5
+    normalization: True
+  fps: 30
+  debug: False
+model:
+  arch: spoter
+  num_frozen_layers: 0
+  num_frames: 70
+  hidden_dim: 108
+training:
+  run_name: spoter_v2.0
+  learning_rate: 0.001
+  weight_decay: 0.01
+  num_train_epochs: 350
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  metric_for_best_model: accuracy
+  # report_to: wandb
+  push_to_hub: True
+  hub_model_id: vsltranslation    # Only enter organization/account name

@@ -1,0 +1,3 @@
+from .video_classification import VideoClassificationPipeline
+from .sl_gcn_graph_classification import SLGCNGraphClassificationPipeline
+from .spoter_graph_classification import SPOTERGraphClassificationPipeline

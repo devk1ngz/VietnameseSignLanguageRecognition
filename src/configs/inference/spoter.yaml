@@ -1,0 +1,9 @@
+model:
+  arch: spoter
+  pretrained: vsltranslation/test_spoter
+inference:
+  source: data/processed/vsl_400/cam_1/000000.mp4
+  output_dir: demo/run_1
+  use_onnx: True
+  show_skeleton: True
+  visualize: True
