@@ -125,7 +125,7 @@ class SPOTERGraphClassificationPipeline(Pipeline):
 
     def _forward(self, inputs: torch.Tensor) -> torch.Tensor:
         if isinstance(self.model, ort.InferenceSession):
-            inputs = inputs.cpu().numpy()
+            inputs = inputs.cpu().numpy().astype(np.float32)
             return torch.from_numpy(self.model.run(None, {"poses": inputs})[0])
         return self.model(inputs.to(self.device)).logits
 
@@ -148,12 +148,16 @@ class SPOTERGraphClassificationPipeline(Pipeline):
 
 class PoseExtract:
     def __call__(self, inputs: Union[Dict[str, Any], str, Path]) -> Pose:
+        # Optional MediaPipe Holistic overrides (e.g. higher model_complexity
+        # or lower detection thresholds) can be passed via "holistic_config".
+        # Defaults are unchanged when the key is absent.
         pose = load_holistic(
             frames=inputs["frames"],
             fps=inputs["fps"],
             width=inputs["width"],
             height=inputs["height"],
             progress=False,
+            additional_holistic_config=inputs.get("holistic_config", {}),
         )
         return pose
 

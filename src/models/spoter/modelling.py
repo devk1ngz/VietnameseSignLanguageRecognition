@@ -85,8 +85,13 @@ class SPOTER(nn.Module):
         ])
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        h = torch.unsqueeze(inputs.squeeze(0).flatten(start_dim=1), 1).float()
-        h = self.transformer(self.pos + h, self.class_query.unsqueeze(0)).transpose(0, 1)
+        # inputs: (batch, num_frames, num_points, in_channels)
+        batch_size = inputs.shape[0]
+        # -> (num_frames, batch, hidden_dim) as required by nn.Transformer
+        h = inputs.flatten(start_dim=2).transpose(0, 1).float()
+        # class query as decoder target: (1, batch, hidden_dim)
+        query = self.class_query.unsqueeze(1).repeat(1, batch_size, 1)
+        h = self.transformer(self.pos + h, query).transpose(0, 1)
         res = self.linear_class(h)
         return res
 
@@ -121,9 +126,10 @@ class SPOTERForGraphClassification(PreTrainedModel):
         poses: torch.Tensor,
         labels: torch.Tensor = None,
     ) -> torch.Tensor:
-        logits = self.model(poses).squeeze(0)
+        # model output: (batch, 1, num_classes) -> (batch, num_classes)
+        logits = self.model(poses).squeeze(1)
         if labels is not None:
-            labels = labels.to(logits.device, dtype=torch.long)
+            labels = labels.to(logits.device, dtype=torch.long).view(-1)
             loss = torch.nn.functional.cross_entropy(logits, labels)
             return ImageClassifierOutput(loss=loss, logits=logits)
         return ImageClassifierOutput(logits=logits)

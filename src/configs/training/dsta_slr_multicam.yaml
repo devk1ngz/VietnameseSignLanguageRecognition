@@ -1,0 +1,45 @@
+data:
+  dataset: visl_400
+  modality: pose
+  subset: cam_1_2_3
+  data_dir: ../data/processed/vsl_400
+  transform:
+    augmentation: True
+    aug_prob: 0.7
+    normalization: True
+    # DSTA-SLR specific augmentation
+    rotation_std: 0.2
+    shear_std: 0.2
+    scale_std: 0.2
+  fps: 30
+  debug: False
+model:
+  arch: dsta_slr
+  num_frozen_layers: 0
+  num_frames: 150
+  num_points: 27
+  in_channels: 3
+  is_vector: False
+  bone_stream: False
+  motion_stream: False
+  graph: wlasl
+  inner_dim: 64
+  drop_layers: 2
+  depth: 4
+  s_num_heads: 1
+  window_size: 120
+training:
+  run_name: dsta_slr_v1.0_multicam
+  learning_rate: 0.001
+  weight_decay: 0.05
+  num_train_epochs: 350
+  per_device_train_batch_size: 64
+  per_device_eval_batch_size: 64
+  dataloader_num_workers: 16
+  eval_strategy: epoch
+  save_strategy: epoch
+  logging_strategy: epoch
+  metric_for_best_model: accuracy
+  # report_to: wandb
+  push_to_hub: False
+  # hub_model_id: vsltranslation    # Only enter organization/account name

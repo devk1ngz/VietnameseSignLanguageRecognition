@@ -16,8 +16,10 @@ from .augmentations import (
     SPOTERRandomAugment,
     SPOTERGaussianNoise,
     SLGCNAugment,
+    SLGCNRandomMasking,
 )
 from .transforms import (
+    SPOTERPad,
     SPOTERShift,
     SPOTERJointSelect,
     SPOTERTensorToDict,
@@ -139,6 +141,8 @@ def _get_spoter_transforms(
             )
         )
 
+    transforms.append(SPOTERPad(processor.num_frames))
+
     return Compose(transforms)
 
 
@@ -167,14 +171,22 @@ def _get_sl_gcn_transforms(
     )
 
     if processor.bone_stream:
-        transforms.append(SLGCNBoneStream())
+        transforms.append(SLGCNBoneStream(processor.num_points))
     if processor.motion_stream:
         transforms.append(SLGCNMotionStream())
 
-    transforms.extend(
-        [
-            SLGCNNormalize(processor.is_vector),
-            NumPyToTensor(),
-        ]
-    )
+    transforms.append(SLGCNNormalize(processor.is_vector))
+
+    if split == "train" and (
+        transform_config.joint_mask_prob > 0
+        or transform_config.frame_mask_prob > 0
+    ):
+        transforms.append(
+            SLGCNRandomMasking(
+                joint_mask_prob=transform_config.joint_mask_prob,
+                frame_mask_prob=transform_config.frame_mask_prob,
+            )
+        )
+
+    transforms.append(NumPyToTensor())
     return Compose(transforms)

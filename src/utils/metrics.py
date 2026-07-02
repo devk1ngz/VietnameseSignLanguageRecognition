@@ -24,6 +24,12 @@ def compute_flops_and_params(model, inputs: dict) -> tuple:
         inputs = inputs["video"].permute(1, 0, 2, 3)
     inputs = inputs.unsqueeze(0).to(model.device)
     macs, params = profile(model, inputs=(inputs,), verbose=False)
+    # thop leaves `total_ops`/`total_params` buffers on the model. They are
+    # created on CPU, so they break DataParallel (which requires every buffer
+    # on cuda:0). Strip them so the model stays pristine after profiling.
+    for module in model.modules():
+        module._buffers.pop("total_ops", None)
+        module._buffers.pop("total_params", None)
     flops = macs * 2
     return flops, params
 

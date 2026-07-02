@@ -23,7 +23,11 @@ def rgb_collate_fn(examples) -> dict:
 
 
 def pose_collate_fn(examples) -> dict:
-    # permute to (num_frames, num_channels, height, width)
     poses = torch.stack([example["pose"] for example in examples])
-    labels = torch.tensor([example["label"] for example in examples])
+    # Labels must be int64 of shape (B,) — required by the HF Trainer's
+    # label smoother (it gathers log-probs with an integer index).
+    labels = torch.tensor(
+        [int(example["label"]) for example in examples],
+        dtype=torch.long,
+    )
     return {"poses": poses, "labels": labels}

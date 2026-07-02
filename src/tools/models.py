@@ -3,6 +3,7 @@ import logging
 import onnxruntime as ort
 from time import time
 from typing import Union
+from pathlib import Path
 from configs import ModelConfig, InferenceConfig, EvaluationConfig
 from utils import (
     POSE_BASED_MODELS,
@@ -13,6 +14,7 @@ from utils import (
 from transformers import (
     ImageProcessingMixin,
     FeatureExtractionMixin,
+    AutoConfig,
     AutoModelForVideoClassification,
     AutoModel,
     Pipeline,
@@ -38,6 +40,54 @@ from pipelines import (
 )
 
 
+def read_gloss2id(gloss_csv: str) -> dict:
+    """Read a ``id,gloss`` csv (no header) into a ``{gloss: id}`` mapping."""
+    import csv
+    gloss2id = {}
+    with open(gloss_csv, newline="") as fh:
+        for row in csv.reader(fh):
+            if len(row) < 2:
+                continue
+            gloss2id[row[1]] = int(row[0])
+    return gloss2id
+
+
+def load_pose_pretrained(path, label2id: dict = None, id2label: dict = None):
+    """Load a trained pose model + processor from a local dir / HF repo.
+
+    Trained checkpoints save ``config.json`` with ``label2id``/``id2label`` as
+    null (they are only passed to the constructor at train time, not persisted),
+    which makes a fresh ``from_pretrained`` crash on ``len(None)``. Backfill them
+    from the provided mapping before instantiating.
+    """
+    resolved = _resolve_pretrained(path)
+    config = AutoConfig.from_pretrained(
+        resolved, trust_remote_code=True, cache_dir="models/huggingface",
+    )
+    if getattr(config, "label2id", None) is None:
+        assert label2id is not None, (
+            f"{path} has null label2id in config; pass label2id (e.g. from gloss.csv)"
+        )
+        config.label2id = label2id
+        config.id2label = id2label or {v: k for k, v in label2id.items()}
+    processor = FeatureExtractionMixin.from_pretrained(
+        resolved, trust_remote_code=True, cache_dir="models/huggingface",
+    )
+    model = AutoModel.from_pretrained(
+        resolved, config=config, trust_remote_code=True, cache_dir="models/huggingface",
+    )
+    model.eval()
+    return config, processor, model
+
+
+def _resolve_pretrained(pretrained: str) -> str:
+    """Return an absolute path if pretrained points to a local directory; otherwise return as-is."""
+    p = Path(pretrained)
+    if p.exists():
+        return str(p.resolve())
+    return pretrained
+
+
 def load_model(
     model_config: Union[ModelConfig, EvaluationConfig],
     label2id: dict = None,
@@ -54,25 +104,26 @@ def load_model(
             return load_pose_model_for_training(model_config, label2id, id2label)
         return load_rgb_model_for_training(model_config, label2id, id2label)
 
+    pretrained = _resolve_pretrained(model_config.pretrained)
     if model_config.arch in POSE_BASED_MODELS:
         processor = FeatureExtractionMixin.from_pretrained(
-            model_config.pretrained,
+            pretrained,
             trust_remote_code=True,
             cache_dir="models/huggingface",
         )
         model = AutoModel.from_pretrained(
-            model_config.pretrained,
+            pretrained,
             trust_remote_code=True,
             cache_dir="models/huggingface",
         )
     else:
         processor = ImageProcessingMixin.from_pretrained(
-            model_config.pretrained,
+            pretrained,
             trust_remote_code=True,
             cache_dir="models/huggingface",
         )
         model = AutoModelForVideoClassification.from_pretrained(
-            model_config.pretrained,
+            pretrained,
             trust_remote_code=True,
             cache_dir="models/huggingface",
         )
@@ -363,6 +414,19 @@ def load_pipeline(
     '''
     '''
     if model_config.arch in POSE_BASED_MODELS:
+        # Pose models are registered as AutoModel (not AutoModelForVideoClassification),
+        # so register the matching custom pipeline before invoking the factory.
+        pose_pipeline_class = (
+            SPOTERGraphClassificationPipeline
+            if model_config.arch == "spoter"
+            else SLGCNGraphClassificationPipeline
+        )
+        PIPELINE_REGISTRY.register_pipeline(
+            "video-classification",
+            pipeline_class=pose_pipeline_class,
+            pt_model=AutoModel,
+            type="multimodal",
+        )
         return pipeline(
             "video-classification",
             model=model_config.pretrained,

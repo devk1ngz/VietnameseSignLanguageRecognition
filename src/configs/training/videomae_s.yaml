@@ -1,8 +1,8 @@
 data:
   dataset: visl_400
   modality: rgb
-  subset: cam_1
-  data_dir: data/processed/vsl_400
+  subset: cam_1_2_3
+  data_dir: ../data/processed/vsl_400
   transform:
     horizontal_flip_prob: 0.5
     aug_type: augmix
@@ -18,13 +18,19 @@ model:
   arch: videomae
   pretrained: MCG-NJU/videomae-small-finetuned-kinetics
 training:
-  run_name: videomae_s_v2.0
+  run_name: videomae_s_multicam
   learning_rate: 0.00005
-  weight_decay: 0
-  num_train_epochs: 1
-  per_device_train_batch_size: 1
-  per_device_eval_batch_size: 1
+  weight_decay: 0.05
+  warmup_ratio: 0.1
+  num_train_epochs: 30
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  dataloader_num_workers: 8
+  eval_strategy: epoch
+  save_strategy: epoch
+  logging_strategy: epoch
+  save_total_limit: 3
   metric_for_best_model: accuracy
   # report_to: wandb
-  push_to_hub: True
-  hub_model_id: vsltranslation    # Only enter organization/account name
+  push_to_hub: False
+  # hub_model_id: vsltranslation    # Only enter organization/account name

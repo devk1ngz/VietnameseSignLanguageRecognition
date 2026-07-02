@@ -15,6 +15,7 @@ class SLGCNConfig(PretrainedConfig):
         block_size: int = 41,
         in_channels: int = 3,
         labeling_mode: str = "spatial",
+        dropout: float = 0.0,
         is_vector: bool = False,
         bone_stream: bool = False,
         motion_stream: bool = False,
@@ -32,6 +33,7 @@ class SLGCNConfig(PretrainedConfig):
         self.block_size = block_size
         self.in_channels = in_channels
         self.labeling_mode = labeling_mode
+        self.dropout = dropout
         self.is_vector = is_vector
         self.bone_stream = bone_stream
         self.motion_stream = motion_stream

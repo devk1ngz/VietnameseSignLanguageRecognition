@@ -1,13 +1,15 @@
 data:
-  dataset: visl_98
+  dataset: visl_400
   modality: pose
-  # subset: cam_1
-  data_dir: vsltranslation/vsl_98
+  subset: cam_1_2_3
+  data_dir: ../data/processed/vsl_400
   transform:
     normalization: True
   fps: 30
   debug: False
 evaluation:
   arch: spoter
-  pretrained: vsltranslation/test_spoter
+  # Best checkpoint from spoter_v3.0_multicam (epoch 336, val top-1 93.67%)
+  pretrained: experiments/spoter_v3.0_multicam/checkpoint-75264
   eval_set: test
+  batch_size: 256

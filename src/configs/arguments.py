@@ -55,6 +55,10 @@ class ProcessRecordedVideosArguments():
 
 @dataclass
 class TransformConfig:
+    # General
+    augmentation: bool = True
+    normalization: bool = True
+
     # RGB specific
     horizontal_flip_prob: float = 0.5
     aug_type: str = "augmix"
@@ -75,6 +79,8 @@ class TransformConfig:
     rotation_std: float = 0.2
     shear_std: float = 0.2
     scale_std: float = 0.2
+    joint_mask_prob: float = 0.0
+    frame_mask_prob: float = 0.0
 
     # SPOTER specific
     add_gaussian_noise: bool = False
@@ -94,7 +100,7 @@ class DataConfig:
     data_dir: str = "data/processed/vsl"
     fps: int = 30
     debug: bool = False
-    transform: TransformConfig = TransformConfig()
+    transform: TransformConfig = field(default_factory=TransformConfig)
 
     def __post_init__(self):
         assert self.dataset in ["visl_98", "visl_400"], \
@@ -117,6 +123,7 @@ class ModelConfig:
     block_size: int = 41
     in_channels: int = 3
     labeling_mode: str = "spatial"
+    dropout: float = 0.0
     is_vector: bool = False
     bone_stream: bool = False
     motion_stream: bool = False
@@ -157,6 +164,8 @@ class TrainingConfig:
     adam_beta2: float = 0.999
     adam_epsilon: float = 1e-8
     warmup_ratio: float = 0.1
+    lr_scheduler_type: str = "linear"
+    label_smoothing_factor: float = 0.0
 
     num_train_epochs: int = 10
     per_device_train_batch_size: int = 8
@@ -165,7 +174,13 @@ class TrainingConfig:
 
     load_best_model_at_end: bool = True
     metric_for_best_model: str = "accuracy"
+    greater_is_better: bool = True
     resume_from_checkpoint: str = None
+
+    # Early stopping (not a HF TrainingArguments field; consumed in train.py).
+    # Stops training if `metric_for_best_model` does not improve for this many
+    # evaluations. Set to None / 0 to disable.
+    early_stopping_patience: int = None
 
     run_name: str = "swin3d"
     report_to: str = None

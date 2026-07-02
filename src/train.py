@@ -3,7 +3,7 @@ import shutil
 import logging
 from argparse import Namespace
 from simple_parsing import ArgumentParser
-from transformers import TrainingArguments, Trainer
+from transformers import TrainingArguments, Trainer, EarlyStoppingCallback
 from configs import DataConfig, ModelConfig, TrainingConfig
 from utils import (
     compute_metrics,
@@ -81,9 +81,20 @@ def main(args: Namespace) -> None:
         data_collator = pose_collate_fn
 
     callbacks = [TrainingCallback()]
+
+    # `early_stopping_patience` is our own field, not a TrainingArguments field,
+    # so pull it out before constructing TrainingArguments.
+    training_args_kwargs = dict(vars(training_config))
+    early_stopping_patience = training_args_kwargs.pop("early_stopping_patience", None)
+    if early_stopping_patience:
+        callbacks.append(
+            EarlyStoppingCallback(early_stopping_patience=early_stopping_patience)
+        )
+        logging.info(f"Early stopping enabled (patience={early_stopping_patience})")
+
     trainer = Trainer(
         model=model,
-        args=TrainingArguments(**vars(training_config)),
+        args=TrainingArguments(**training_args_kwargs),
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics,

@@ -302,3 +302,11 @@ wandb/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+dataset 
+merged
+hf_cache
+df_cache
+data_more
+test_output
+.claude
+guide/

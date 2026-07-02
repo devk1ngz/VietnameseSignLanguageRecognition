@@ -21,23 +21,152 @@ class SLGCNFeatureExtractor(FeatureExtractionMixin):
         self.motion_stream = config.motion_stream
 
 
+# Anatomical skeleton edges for the 27-joint layout (see SLGCN_JOINTS[27] in
+# src/utils/constants.py). Local indices after joint selection:
+#   Body (0-6):   0=nose, 1=L-shoulder, 2=R-shoulder, 3=L-elbow, 4=R-elbow,
+#                 5=L-wrist, 6=R-wrist
+#   Left hand (7-16):  7=wrist, 8=thumb-tip, 9=index-mcp, 10=index-tip,
+#                 11=middle-mcp, 12=middle-tip, 13=ring-mcp, 14=ring-tip,
+#                 15=pinky-mcp, 16=pinky-tip
+#   Right hand (17-26): same order as left, offset by +10
+SLGCN_SKELETON_EDGES = {
+    27: [
+        # body / torso + arms
+        (0, 1), (0, 2), (1, 2),
+        (1, 3), (3, 5), (2, 4), (4, 6),
+        # body wrist -> hand wrist
+        (5, 7), (6, 17),
+        # left hand: wrist -> finger bases, base -> tip, palm arch
+        (7, 8),
+        (7, 9), (9, 10),
+        (7, 11), (11, 12),
+        (7, 13), (13, 14),
+        (7, 15), (15, 16),
+        (9, 11), (11, 13), (13, 15),
+        # right hand (offset +10 from left)
+        (17, 18),
+        (17, 19), (19, 20),
+        (17, 21), (21, 22),
+        (17, 23), (23, 24),
+        (17, 25), (25, 26),
+        (19, 21), (21, 23), (23, 25),
+    ],
+}
+
+
+def _build_edges(num_points: int) -> list:
+    """Return the skeleton edges for ``num_points`` (anatomical or chain)."""
+    edges = SLGCN_SKELETON_EDGES.get(num_points)
+    if edges is not None:
+        return list(edges)
+    # Baseline chain connectivity for unsupported joint counts
+    return [(i, i + 1) for i in range(num_points - 1)]
+
+
+def normalize_adjacency(adjacency: np.ndarray) -> np.ndarray:
+    """Symmetric normalization: D^-1/2 (A + I) D^-1/2."""
+    adjacency = adjacency + np.eye(adjacency.shape[0], dtype=adjacency.dtype)
+    degree = adjacency.sum(axis=1)
+    d_inv_sqrt = np.power(degree, -0.5, where=degree > 0)
+    d_inv_sqrt[degree == 0] = 0.0
+    d_mat = np.diag(d_inv_sqrt)
+    return (d_mat @ adjacency @ d_mat).astype(np.float32)
+
+
+def get_hop_distance(num_points: int, edges: list, max_hop: int = 1) -> np.ndarray:
+    """Pairwise hop (graph) distance between joints, capped at ``max_hop``."""
+    adjacency = np.zeros((num_points, num_points))
+    for i, j in edges:
+        adjacency[i, j] = 1
+        adjacency[j, i] = 1
+    hop_dis = np.full((num_points, num_points), np.inf)
+    transfer = [np.linalg.matrix_power(adjacency, d) for d in range(max_hop + 1)]
+    arrive = np.stack(transfer) > 0
+    for d in range(max_hop, -1, -1):
+        hop_dis[arrive[d]] = d
+    return hop_dis
+
+
+def normalize_digraph(adjacency: np.ndarray) -> np.ndarray:
+    """Asymmetric normalization A D^-1 (column-normalized)."""
+    degree = adjacency.sum(axis=0)
+    num = adjacency.shape[0]
+    d_inv = np.zeros((num, num))
+    for i in range(num):
+        if degree[i] > 0:
+            d_inv[i, i] = degree[i] ** -1
+    return adjacency @ d_inv
+
+
+def get_spatial_adjacency(num_points: int, edges: list) -> np.ndarray:
+    """
+    ST-GCN "spatial" partitioning into 3 subsets per the original paper:
+    root (self), centripetal (neighbours closer to the graph centre) and
+    centrifugal (neighbours farther from the centre). Returns (3, V, V).
+
+    The graph centre is chosen automatically as the joint that minimises the
+    total hop distance to every other joint (a body joint for our layouts).
+    """
+    max_hop = 1
+    hop_dis = get_hop_distance(num_points, edges, max_hop=max_hop)
+    finite = np.where(np.isinf(hop_dis), 0.0, hop_dis)
+    center = int(np.argmin(finite.sum(axis=1)))
+
+    valid_hop = range(max_hop + 1)
+    adjacency = np.zeros((num_points, num_points))
+    for hop in valid_hop:
+        adjacency[hop_dis == hop] = 1
+    norm_adj = normalize_digraph(adjacency)
+
+    subsets = []
+    for hop in valid_hop:
+        a_root = np.zeros((num_points, num_points))
+        a_close = np.zeros((num_points, num_points))
+        a_further = np.zeros((num_points, num_points))
+        for i in range(num_points):
+            for j in range(num_points):
+                if hop_dis[j, i] == hop:
+                    if hop_dis[j, center] == hop_dis[i, center]:
+                        a_root[j, i] = norm_adj[j, i]
+                    elif hop_dis[j, center] > hop_dis[i, center]:
+                        a_close[j, i] = norm_adj[j, i]
+                    else:
+                        a_further[j, i] = norm_adj[j, i]
+        if hop == 0:
+            subsets.append(a_root)
+        else:
+            subsets.append(a_root + a_close)
+            subsets.append(a_further)
+    return np.stack(subsets).astype(np.float32)
+
+
 def get_adjacency_matrix(num_points: int, labeling_mode: str = "spatial") -> np.ndarray:
     """
-    Build a simple adjacency matrix for the skeleton graph.
-    Uses a chain-like connectivity for the body + hand landmarks.
+    Build the skeleton adjacency tensor for the graph convolution.
+
+    Returns a stack of normalized adjacency matrices with shape (K, V, V):
+      - "spatial": K=3 ST-GCN partitions (root / centripetal / centrifugal)
+      - any other mode: K=1 symmetrically normalized adjacency (D^-1/2 Â D^-1/2)
+
+    For the 27-joint layout an anatomically correct skeleton graph is used
+    (body + both hands); other joint counts fall back to chain connectivity.
     """
-    adjacency = np.eye(num_points, dtype=np.float32)
-    # Connect consecutive joints as a baseline
-    for i in range(num_points - 1):
-        adjacency[i, i + 1] = 1
-        adjacency[i + 1, i] = 1
-    return adjacency
+    edges = _build_edges(num_points)
+    if labeling_mode == "spatial":
+        return get_spatial_adjacency(num_points, edges)
+    adjacency = np.zeros((num_points, num_points), dtype=np.float32)
+    for i, j in edges:
+        adjacency[i, j] = 1
+        adjacency[j, i] = 1
+    return normalize_adjacency(adjacency)[None]  # (1, V, V)
 
 
 class SpatialGraphConvolution(nn.Module):
     """
-    Spatial Graph Convolution layer.
-    Performs graph convolution on skeleton joints using the adjacency matrix.
+    Spatial Graph Convolution layer with multi-subset partitioning and a
+    learnable edge-importance mask (adaptive graph). The adjacency has shape
+    (K, V, V); a separate 1x1 conv branch is learned per subset and the
+    partitions are aggregated by the (masked) adjacency.
     """
 
     def __init__(
@@ -48,11 +177,13 @@ class SpatialGraphConvolution(nn.Module):
         bias: bool = True,
     ) -> None:
         super().__init__()
-        self.num_subsets = 1
+        self.num_subsets = adjacency.shape[0]
         self.register_buffer(
             "adjacency",
             torch.from_numpy(adjacency).float(),
         )
+        # Learnable per-edge importance, initialised to 1 (identity behaviour).
+        self.edge_importance = nn.Parameter(torch.ones_like(self.adjacency))
         self.conv = nn.Conv2d(
             in_channels,
             out_channels * self.num_subsets,
@@ -65,9 +196,11 @@ class SpatialGraphConvolution(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (N, C, T, V)
         N, C, T, V = x.size()
-        # Graph convolution: aggregate neighbor features
-        support = torch.einsum("nctv,vw->nctw", x, self.adjacency)
-        out = self.conv(support)
+        adjacency = self.adjacency * self.edge_importance
+        out = self.conv(x)  # (N, out*K, T, V)
+        out = out.view(N, self.num_subsets, -1, T, V)
+        # Aggregate neighbour features per partition, then sum over subsets.
+        out = torch.einsum("nkctv,kvw->nctw", out, adjacency)
         out = self.bn(out)
         out = self.relu(out)
         return out
@@ -114,10 +247,12 @@ class STGCNBlock(nn.Module):
         adjacency: np.ndarray,
         stride: int = 1,
         residual: bool = True,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.sgcn = SpatialGraphConvolution(in_channels, out_channels, adjacency)
         self.tgcn = TemporalConvolution(out_channels, out_channels, stride=stride)
+        self.dropout = nn.Dropout(dropout)
         self.relu = nn.ReLU(inplace=True)
 
         if not residual:
@@ -134,6 +269,7 @@ class STGCNBlock(nn.Module):
         res = self.residual(x)
         out = self.sgcn(x)
         out = self.tgcn(out)
+        out = self.dropout(out)
         return self.relu(out + res)
 
 
@@ -150,6 +286,7 @@ class SLGCN(nn.Module):
         in_channels: int = 3,
         num_points: int = 27,
         labeling_mode: str = "spatial",
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         adjacency = get_adjacency_matrix(num_points, labeling_mode)
@@ -157,17 +294,18 @@ class SLGCN(nn.Module):
         self.data_bn = nn.BatchNorm1d(in_channels * num_points)
 
         self.layers = nn.Sequential(
-            STGCNBlock(in_channels, 64, adjacency, residual=False),
-            STGCNBlock(64, 64, adjacency),
-            STGCNBlock(64, 64, adjacency),
-            STGCNBlock(64, 128, adjacency, stride=2),
-            STGCNBlock(128, 128, adjacency),
-            STGCNBlock(128, 128, adjacency),
-            STGCNBlock(128, 256, adjacency, stride=2),
-            STGCNBlock(256, 256, adjacency),
-            STGCNBlock(256, 256, adjacency),
+            STGCNBlock(in_channels, 64, adjacency, residual=False, dropout=dropout),
+            STGCNBlock(64, 64, adjacency, dropout=dropout),
+            STGCNBlock(64, 64, adjacency, dropout=dropout),
+            STGCNBlock(64, 128, adjacency, stride=2, dropout=dropout),
+            STGCNBlock(128, 128, adjacency, dropout=dropout),
+            STGCNBlock(128, 128, adjacency, dropout=dropout),
+            STGCNBlock(128, 256, adjacency, stride=2, dropout=dropout),
+            STGCNBlock(256, 256, adjacency, dropout=dropout),
+            STGCNBlock(256, 256, adjacency, dropout=dropout),
         )
 
+        self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(256, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -190,6 +328,7 @@ class SLGCN(nn.Module):
         # Merge back person dim
         x = x.view(N, M, -1).mean(dim=1)  # (N, C')
 
+        x = self.dropout(x)
         return self.fc(x)
 
 
@@ -211,6 +350,7 @@ class SLGCNForGraphClassification(PreTrainedModel):
             in_channels=config.in_channels,
             num_points=config.num_points,
             labeling_mode=config.labeling_mode,
+            dropout=config.dropout,
         )
 
         # Load pretrained weights if path exists

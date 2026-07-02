@@ -2,6 +2,29 @@ import torch
 import numpy as np
 from pose_format import Pose
 from utils import SLGCN_JOINTS, COCO_TO_POSE_FORMAT
+from models.sl_gcn.modelling import _build_edges
+
+
+def _build_bone_pairs(num_points: int) -> list:
+    """
+    Return a list of (child, parent) joint index pairs describing the skeleton
+    tree, derived from the same anatomical edges used by the model graph.
+    The tree is rooted at joint 0 via BFS; the root has no bone.
+    """
+    edges = _build_edges(num_points)
+    neighbours = {v: [] for v in range(num_points)}
+    for i, j in edges:
+        neighbours[i].append(j)
+        neighbours[j].append(i)
+    parent = {0: None}
+    queue = [0]
+    while queue:
+        node = queue.pop(0)
+        for nxt in neighbours[node]:
+            if nxt not in parent:
+                parent[nxt] = node
+                queue.append(nxt)
+    return [(child, par) for child, par in parent.items() if par is not None]
 
 
 class SLGCNJointSelect:
@@ -51,53 +74,31 @@ class SLGCNPad:
 
 
 class SLGCNMotionStream:
+    """Temporal motion stream: per-frame displacement (x[t+1] - x[t])."""
+
     def __call__(self, data: np.ndarray) -> np.ndarray:
-        T = data.shape[1]
-        ori_data = data
-        for t in range(T - 1):
-            data[:, t, :, :] = ori_data[:, t + 1, :, :] - ori_data[:, t, :, :]
-        data[:, T - 1, :, :] = 0
-        return data
+        # data: (C, T, V, M)
+        motion = np.zeros_like(data)
+        motion[:, :-1, :, :] = data[:, 1:, :, :] - data[:, :-1, :, :]
+        return motion
 
 
 class SLGCNBoneStream:
-    def __init__(self) -> None:
-        self.ori_idxs = (
-            (5, 6),
-            (5, 7),
-            (6, 8),
-            (8, 10),
-            (7, 9),
-            (9, 11),
-            (12, 13),
-            (12, 14),
-            (12, 16),
-            (12, 18),
-            (12, 20),
-            (14, 15),
-            (16, 17),
-            (18, 19),
-            (20, 21),
-            (22, 23),
-            (22, 24),
-            (22, 26),
-            (22, 28),
-            (22, 30),
-            (24, 25),
-            (26, 27),
-            (28, 29),
-            (30, 31),
-            (10, 12),
-            (11, 22),
-        )
+    """
+    Bone stream: each joint is replaced by the vector to its parent joint,
+    using the anatomical skeleton tree (consistent with the model graph).
+    The root joint has no parent and is left as zeros.
+    """
+
+    def __init__(self, num_points: int = 27) -> None:
+        self.pairs = _build_bone_pairs(num_points)
 
     def __call__(self, data: np.ndarray) -> np.ndarray:
-        ori_data = data
-        for v1, v2 in self.ori_idxs:
-            data[:, :, v2 - 5, :] = (
-                ori_data[:, :, v2 - 5, :] - ori_data[:, :, v1 - 5, :]
-            )
-        return data
+        # data: (C, T, V, M)
+        bone = np.zeros_like(data)
+        for child, parent in self.pairs:
+            bone[:, :, child, :] = data[:, :, child, :] - data[:, :, parent, :]
+        return bone
 
 
 class NumPyToTensor:

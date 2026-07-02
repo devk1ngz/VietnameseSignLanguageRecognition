@@ -56,6 +56,8 @@ def load_visl_400(
         df["pose"] = df["video_id"].apply(lambda x: str(data_dir / f"{x}.pose"))
         dfs.append(df)
     df = pd.concat(dfs, ignore_index=True)
+    df = df.dropna(subset=["gloss_id"])
+    df["gloss_id"] = df["gloss_id"].astype(int)
 
     common_signer_ids = {
         "020": ("1", "2", "3"),

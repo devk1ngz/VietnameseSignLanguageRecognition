@@ -1,9 +1,9 @@
 model:
   arch: spoter
-  pretrained: vsltranslation/test_spoter
+  pretrained: experiments/spoter_v3.0_multicam/checkpoint-75264
 inference:
-  source: data/processed/vsl_400/cam_1/000000.mp4
+  source: src/test/cam-on.mp4
   output_dir: demo/run_1
-  use_onnx: True
+  use_onnx: False
   show_skeleton: True
   visualize: True
