@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Trong so model khong commit; lay tu recognition/ khi chay.
+weights/*
+!weights/.gitkeep

@@ -1,9 +1,0 @@
-model:
-  arch: spoter
-  pretrained: experiments/spoter_v3.0_multicam/checkpoint-75264
-inference:
-  source: src/test/cam-on.mp4
-  output_dir: demo/run_1
-  use_onnx: False
-  show_skeleton: True
-  visualize: True

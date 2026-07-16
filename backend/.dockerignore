@@ -1,0 +1,8 @@
+# venv host (khac kien truc/duong dan) — container tu build lai bang `uv sync`.
+.venv/
+# Rac & cache
+__pycache__/
+*.py[cod]
+.git/
+.claude/
+*.egg-info/

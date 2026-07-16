@@ -1,0 +1,44 @@
+[project]
+name = "vietnamesesignlanguagerecognition"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+# Chi con dependency phuc vu SERVING (FastAPI + demo Gradio + 2 model ONNX).
+# Cac goi training/export (wandb, evaluate, thop, timm, pytorchvideo, transformers, onnx,
+# onnxscript, ...) da chuyen sang repo training rieng.
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "httpx>=0.27.0",
+    "gradio>=6.17.3",
+    "mediapipe==0.10.21",
+    "numpy",
+    "onnxruntime-gpu==1.26.0",
+    "openai>=2.44.0",
+    "opencv-python==4.10.0.84",
+    "pose-format==0.13.0",
+    "pydantic-settings==2.14.2",
+    "soundfile>=0.14.0",
+    "torch==2.12.0",
+    "torchvision==0.27.0",
+    "vieneu>=2.7.0",
+]
+
+# PyTorch build cho CUDA 12.6 — tương thích driver NVIDIA 535 (CUDA 12.2).
+# Tránh bản cu130 mặc định trên PyPI vì nó đòi driver mới hơn -> fallback CPU.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+# vieneu khai bao "onnxruntime" (ban CPU) nhung du an dung onnxruntime-gpu; hai goi nay
+# ghi de cung package `onnxruntime` nen KHONG duoc cai ca hai. Marker khong bao gio dung
+# de loai ban CPU khoi resolution.
+[tool.uv]
+override-dependencies = ["onnxruntime; sys_platform == 'never'"]
+

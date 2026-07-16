@@ -1,0 +1,25 @@
+services:
+  # ==========================================
+  # Ollama — Host Qwen3 1.7B (LLM) trên GPU.
+  # Dùng cho bước ghép câu trong demo Gradio (backend/demo_gradio.py).
+  # Lần đầu: docker compose exec ollama ollama pull qwen3:1.7b
+  # ==========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: signspeak-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama_data:
+    name: signspeak-ollama-data

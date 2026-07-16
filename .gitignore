@@ -302,11 +302,33 @@ wandb/
 ehthumbs.db
 Thumbs.db
 desktop.ini
-dataset 
+dataset
 merged
 hf_cache
 df_cache
 data_more
 test_output
-.claude
 guide/
+.data
+
+# ----------------------------------------------------------
+# Tài liệu nội bộ / file hướng dẫn AI-assistant — không push GitHub.
+# Chỉ giữ các README.md (giới thiệu chung); tài liệu chi tiết để nội bộ.
+# ----------------------------------------------------------
+.claude/
+CLAUDE.md
+AGENT.md
+RUN_GUIDE.md
+guide.md
+*.local.md
+ARCHITECTURE.md
+front-end-architecture.md
+backend/docs/
+
+# ----------------------------------------------------------
+# Ngoại lệ: assets của frontend PHẢI được commit
+# (các rule *.png/*.jpg ở trên chỉ nhằm chặn ảnh dataset)
+# ----------------------------------------------------------
+!frontend/src/assets/**
+!frontend/public/**
+!frontend/index.html

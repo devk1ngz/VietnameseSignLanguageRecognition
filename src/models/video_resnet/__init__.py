@@ -1,2 +1,0 @@
-from .configuration import VideoResNetConfig
-from .modelling import VideoResNetImageProcessor, VideoResNetForVideoClassification
