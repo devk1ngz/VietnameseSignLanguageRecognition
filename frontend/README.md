@@ -1,16 +1,50 @@
-# React + Vite
+# SignSpeak Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Giao diện web (React + Vite) cho hệ thống dịch ngôn ngữ ký hiệu tiếng Việt (VSL) SignSpeak.
+Dùng MediaPipe Holistic trong trình duyệt để trích keypoint từ webcam, gửi qua WebSocket tới
+backend FastAPI để nhận dạng ký hiệu, ghép câu và phát giọng nói.
 
-Currently, two official plugins are available:
+```
+webcam → MediaPipe Holistic (in-browser) → 108 float keypoints → ws://.../ws/keypoints
+       ← gloss / câu tiếng Việt / audio (WAV bytes)
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Cấu trúc
 
-## React Compiler
+```text
+src/
+├── App.jsx                 # layout, khởi tạo WebSocket
+├── main.jsx                # entry point
+├── components/
+│   ├── CameraPanel/        # camera + gửi frame
+│   ├── ResultPanel/        # hiển thị gloss / câu / audio
+│   ├── ManualPanel/        # chế độ nhận dạng từng từ
+│   ├── LandingPage/
+│   └── ui/                 # component dùng chung
+├── hooks/                   # useCamera, useWebSocket
+├── services/                # ws.js, api.js — nơi duy nhất gọi network
+├── store/                   # Zustand store
+└── utils/                   # frameCapture, audioHelper
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Quy tắc cho AI coding agent: xem `AGENT.md`.
 
-## Expanding the Oxlint configuration
+## Cài đặt & chạy
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+npm install
+npm run dev       # http://localhost:5173
+npm run build      # build production
+npm run lint       # oxlint
+```
+
+## Cấu hình môi trường
+
+Sao chép `.env.development` hoặc `.env.production` phù hợp, hoặc chỉnh trực tiếp:
+
+```bash
+VITE_WS_URL=ws://localhost:8000/ws/keypoints
+VITE_API_URL=http://localhost:8000
+```
+
+Backend serving cần chạy trước (xem `backend/README.md`).

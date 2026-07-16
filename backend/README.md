@@ -35,4 +35,22 @@ Bước ghép câu cần Ollama tại `OLLAMA_BASE_URL` (mặc định `http://l
 `OLLAMA_MODEL` (mặc định `qwen3:1.7b`). Thiếu Ollama thì nhận dạng + TTS vẫn chạy, câu sẽ là
 gloss thô ghép lại.
 
+### Hợp đồng keypoint realtime (108 float / frame)
+
+Client (frontend) gửi keypoint đã qua MediaPipe Holistic + chọn khớp qua `/ws/keypoints`:
+54 khớp x (x, y), **tọa độ pixel**, theo thứ tự `JointSelect`: 12 khớp thân (nose, neck,
+rightEye, leftEye, rightEar, leftEar, rightShoulder, leftShoulder, rightElbow, leftElbow,
+rightWrist, leftWrist) rồi 21 khớp tay TRÁI rồi 21 khớp tay PHẢI. **Khớp index 1 (neck) phải
+là `[0, 0]`.**
+
+## API
+
+- `WS /ws/keypoints` — nhận `{"keypoints": [108 float], "end_sign": bool}`; trả JSON
+  `gloss`/`processing`/`sentence`/`error` và **binary WAV** sau `sentence`.
+- `POST /api/recognize` — fallback one-shot: `{"frames": [[108 float], ...]}`.
+- `POST /api/recognize-video` — nhận file video, tự chạy MediaPipe Holistic + late-fusion
+  SPOTER/SL-GCN (giống `demo_gradio.py`).
+- `POST /api/tts` — `{"text": "..."}` → `audio/wav` bytes.
+- `GET /health` — trạng thái spoter/ollama/tts.
+
 Chi tiết kiến trúc: `ARCHITECTURE.md`, `docs/local_fusion_deployment.md`.
